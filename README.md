@@ -1,0 +1,2 @@
+# deric
+Descriptive rich CLI
