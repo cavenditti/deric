@@ -1,4 +1,4 @@
-deric — DEclarative RIch Cli
+# deric — DEclarative RIch Cli
 
 Minimal library to build CLI apps with integrated TOML config file.
 
