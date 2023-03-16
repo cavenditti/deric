@@ -16,6 +16,9 @@ tomlkit = "^0.11.6"
 
 [tool.poetry.group.dev.dependencies]
 bpython = "^0.24"
+pytest = "^7.2.2"
+pytest-cov = "^4.0.0"
+mock = "^5.0.1"
 
 [build-system]
 requires = ["poetry-core"]

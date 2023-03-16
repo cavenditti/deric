@@ -11,7 +11,9 @@ all of our requirements.
 from __future__ import annotations
 import abc
 import argparse
+from collections.abc import Iterable
 import logging
+import sys
 from types import SimpleNamespace
 from typing import Type
 from pydantic.dataclasses import dataclass as pydantic_dataclass
@@ -75,6 +77,10 @@ def model_from_dataclass(kls) -> Type[BaseModel]:
     ).__pydantic_model__
 
 
+class _empty:
+    pass
+
+
 class Command(abc.ABC):
     """
     Generic CLI command.
@@ -83,7 +89,7 @@ class Command(abc.ABC):
     name: str
     description: str
     Config: Type
-    subcommands: set[Type[Command]] = set()
+    subcommands: Iterable[Type[Command]] = set()
 
     def __init__(self, is_subcommand=False) -> None:
         """
@@ -95,7 +101,12 @@ class Command(abc.ABC):
 
         # add missing fields if not specified by user. Methods using these are
         # classmethods so this must be done on the class and not the instance.
-        self.__class__.Config = add_missing_fields(self.__class__.Config)
+        if not hasattr(self.__class__, "Config"):
+            self.__class__.Config = _empty
+
+        # Add config, logfile, etc if it's the main command
+        #if not is_subcommand:
+        #   self.__class__.Config = add_missing_fields(self.__class__.Config)
 
         super().__init__()
         self.is_subcommand = is_subcommand
@@ -110,7 +121,8 @@ class Command(abc.ABC):
         # Good-looking logging to console and file
         # FIXME how to handle config_file and logfile if not
         #   specified in the Command subclass config?
-        setup_logging(config["logfile"])
+        if "logfile" in config:
+            setup_logging(config["logfile"])
 
         if "config_file" in config:
             path = config["config_file"]
@@ -131,7 +143,10 @@ class Command(abc.ABC):
 
     @abc.abstractmethod
     def run(self, config: RuntimeConfig):
-        pass
+        """
+        Function to run for the command
+        """
+
 
     @classmethod
     def _populate_arguments(
@@ -146,6 +161,8 @@ class Command(abc.ABC):
             parser: parser to use (means we're in a subparser)
         """
         # Add Pydantic model to an ArgumentParser
+        if not hasattr(cls, "Config"):
+            cls.Config = _empty
         fields = model_from_dataclass(cls.Config).__fields__
 
         def parser_args(name, field) -> tuple[list, dict]:
@@ -224,7 +241,7 @@ class Command(abc.ABC):
             cmd._populate_arguments(parser=new_subcommand)
 
             if cmd.subcommands:
-                cmd._populate_subcommands(parser=parser)
+                cmd._populate_subcommands(parser=new_subcommand)
         return parser
 
     @classmethod
