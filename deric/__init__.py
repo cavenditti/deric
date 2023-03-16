@@ -13,7 +13,6 @@ import abc
 import argparse
 from collections.abc import Iterable
 import logging
-import sys
 from types import SimpleNamespace
 from typing import Type
 from pydantic.dataclasses import dataclass as pydantic_dataclass
@@ -38,10 +37,9 @@ def make_namespace(d):
         return d
 
 
+"""
 def add_missing_fields(model: Type[BaseModel]) -> Type[BaseModel]:
-    """
-    Adds missing attributes to dataclass
-    """
+    #Adds missing attributes to dataclass
     '''
     if not hasattr(model, "config_file"):
         setattr(
@@ -65,6 +63,7 @@ def add_missing_fields(model: Type[BaseModel]) -> Type[BaseModel]:
         )
         model.__annotations__["logfile"] = str
     return model
+"""
 
 
 def model_from_dataclass(kls) -> Type[BaseModel]:
@@ -253,11 +252,20 @@ class Command(abc.ABC):
         """
         Config = model_from_dataclass(cls.Config)
         config = Config(**relevant).dict()
+
+        # FIXME this is needed because of the way we handle relevant configs
+        # below (when we recursively call validate_config).
+        if "subcommand" in relevant:
+            relevant[cls.name + "_subcommand"] = relevant.pop("subcommand")
+
         if cls.name + "_subcommand" in relevant:
             subcommand = relevant[cls.name + "_subcommand"]
             config["subcommand"] = subcommand
             for cmd in cls.subcommands:
                 if cmd.name == subcommand:
+                    # instantiate subcommand and put run method in the queue
+                    cmds.append(cmd(is_subcommand=True))
+
                     # validate subcommand config
                     cmd_config = cmd.validate_config(
                         {
@@ -274,8 +282,6 @@ class Command(abc.ABC):
                         if not k.startswith(cmd.name + "_")
                     }
                     config[cmd.name] = cmd_config
-                    # instantiate subcommand and put run method in the queue
-                    cmds.append(cmd(is_subcommand=True))
         return config
 
     def start(self):

@@ -34,7 +34,7 @@ class Subsub(Command):
 class Nested(Command):
     name = "nested"
     description = "Print 'nested'"
-    
+
     subcommands = [Subsub]
 
     def run(self, config):
@@ -62,7 +62,7 @@ def test_subcommand_help(capsys):
             SimpleApp().start()
     captured = capsys.readouterr()
     assert captured.out == (
-"""usage: your_simple_app [-h] [--string STRING] {greet,print,nested} ...
+        """usage: your_simple_app [-h] [--string STRING] {greet,print,nested} ...
 
 Print a value and exit
 
@@ -78,7 +78,7 @@ your_simple_app_subcommand:
     print               Print a value
     nested              Print 'nested'
 """
-)
+    )
 
 
 def test_subcommand(capsys):
@@ -108,5 +108,3 @@ def test_nested_subcommands(capsys):
         SimpleApp().start()
     captured = capsys.readouterr()
     assert captured.out == "Runnig your_simple_app abc\nnested\nI'm nested\n"
-
-
