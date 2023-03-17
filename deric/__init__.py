@@ -14,8 +14,9 @@ import argparse
 from collections.abc import Iterable
 import logging
 from types import SimpleNamespace
-from typing import Type
+from typing import Any, Type
 from pydantic.dataclasses import dataclass as pydantic_dataclass
+from copy import deepcopy
 
 from tomlkit import parse
 from pydantic import BaseModel, ConfigDict, Extra, Field
@@ -37,10 +38,30 @@ def make_namespace(d):
         return d
 
 
+def add_missing_fields(
+    model: Type,
+    field: str,
+    field_type: Type,
+    default: Any,
+    description,
+) -> Type:
+    """
+    Adds missing attributes to dataclass.
+    """
+    if not hasattr(model, field):
+        setattr(
+            model,
+            field,
+            Field(
+                default,
+                description=description,
+            ),
+        )
+        model.__annotations__[field] = field_type
+    return model
+
+
 """
-def add_missing_fields(model: Type[BaseModel]) -> Type[BaseModel]:
-    #Adds missing attributes to dataclass
-    '''
     if not hasattr(model, "config_file"):
         setattr(
             model,
@@ -51,7 +72,6 @@ def add_missing_fields(model: Type[BaseModel]) -> Type[BaseModel]:
             ),
         )
         model.__annotations__["config_file"] = str
-    '''
     if not hasattr(model, "logfile"):
         setattr(
             model,
@@ -62,7 +82,6 @@ def add_missing_fields(model: Type[BaseModel]) -> Type[BaseModel]:
             ),
         )
         model.__annotations__["logfile"] = str
-    return model
 """
 
 
@@ -90,11 +109,25 @@ class Command(abc.ABC):
     Config: Type
     subcommands: Iterable[Type[Command]] = set()
 
+    @classmethod
+    def with_logfile(cls, default="run.log") -> Type[Command]:
+        # Add config, logfile, etc if it's the main command
+        kls = deepcopy(cls)
+
+        # allow with no explicit Config
+        Config = cls.Config if hasattr(cls, "Config") else _empty
+
+        kls.Config = add_missing_fields(
+            deepcopy(Config), "logfile", str, default, "Path of run log"
+        )
+        return kls
+    # "config_file", str, "config.toml", "Config file to use"
+
     def __init__(self, is_subcommand=False) -> None:
         """
         Parse and validate settings on object instantiation
 
-        `Command` configs are validated using Pydantic and `config` attribute is set 
+        `Command` configs are validated using Pydantic and `config` attribute is set
         with a `RuntimeConfig` generated from it.
         """
 
@@ -102,10 +135,6 @@ class Command(abc.ABC):
         # classmethods so this must be done on the class and not the instance.
         if not hasattr(self.__class__, "Config"):
             self.__class__.Config = _empty
-
-        # Add config, logfile, etc if it's the main command
-        #if not is_subcommand:
-        #   self.__class__.Config = add_missing_fields(self.__class__.Config)
 
         super().__init__()
         self.is_subcommand = is_subcommand
@@ -145,7 +174,6 @@ class Command(abc.ABC):
         """
         Function to run for the command
         """
-
 
     @classmethod
     def _populate_arguments(
