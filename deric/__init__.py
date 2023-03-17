@@ -25,7 +25,17 @@ from deric.utils.logging import setup_logging
 
 
 class RuntimeConfig(SimpleNamespace):
-    pass
+    def to_dict(self):
+        """
+        Recursively convert to dict
+        """
+        d = {}
+        for k,v in vars(self).items():
+            if isinstance(v, RuntimeConfig):
+                d[k] = v.to_dict()
+            else:
+                d[k] = v
+        return d
 
 
 def make_namespace(d):
