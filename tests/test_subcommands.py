@@ -58,6 +58,13 @@ class SimpleApp(Command):
         print("Runnig your_simple_app", config.string)
 
 
+def test_subcommands_meta_parent():
+    assert Greet.parent == SimpleApp
+    assert Print.parent == SimpleApp
+    assert Nested.parent == SimpleApp
+    assert Subsub.parent == Nested
+
+
 def test_subcommand_help(capsys):
     args = "main.py -h".split()
     with mock.patch("sys.argv", args):
@@ -102,7 +109,7 @@ def test_subcommand_duplicated_arg(capsys):
 
 def test_subcommand_prevent_run():
     with pytest.raises(RuntimeError):
-        Greet(is_subcommand=True).start()
+        Greet().start()
 
 
 def test_nested_subcommands(capsys):
@@ -129,4 +136,3 @@ options:
                         nested arg to print
 """
     )
-

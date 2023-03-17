@@ -99,7 +99,14 @@ class _empty:
     pass
 
 
-class Command(abc.ABC):
+class CommandMeta(abc.ABCMeta):
+    def __new__(cls, name, bases, dct):
+        x = super().__new__(cls, name, bases, dct)
+        x.set_parent(None)
+        return x
+
+
+class Command(metaclass=CommandMeta):
     """
     Generic CLI command.
     """
@@ -108,6 +115,17 @@ class Command(abc.ABC):
     description: str
     Config: Type
     subcommands: Iterable[Type[Command]] = set()
+
+    parent: Type[Command] | None = None
+
+    @classmethod
+    def set_parent(cls, parent):
+        """
+        Recursively set parent commands
+        """
+        cls.parent = parent
+        for subcmd in cls.subcommands:
+            subcmd.set_parent(cls)
 
     @classmethod
     def with_logfile(cls, default="run.log") -> Type[Command]:
@@ -124,7 +142,7 @@ class Command(abc.ABC):
 
     # "config_file", str, "config.toml", "Config file to use"
 
-    def __init__(self, is_subcommand=False) -> None:
+    def __init__(self) -> None:
         """
         Parse and validate settings on object instantiation
 
@@ -138,7 +156,6 @@ class Command(abc.ABC):
             self.__class__.Config = _empty
 
         super().__init__()
-        self.is_subcommand = is_subcommand
         if self.is_subcommand:
             return
 
@@ -170,11 +187,19 @@ class Command(abc.ABC):
         except AttributeError:
             pass
 
+    @property
+    def is_subcommand(self) :
+        return self.parent is not None
+
     @abc.abstractmethod
     def run(self, config: RuntimeConfig):
         """
         Function to run for the command
         """
+
+    def default_config(self):
+        return {}
+        #if self.is_subcommand
 
     @classmethod
     def _populate_arguments(
@@ -296,7 +321,7 @@ class Command(abc.ABC):
             for cmd in cls.subcommands:
                 if cmd.name == subcommand:
                     # instantiate subcommand and put run method in the queue
-                    cmds.append(cmd(is_subcommand=True))
+                    cmds.append(cmd())
 
                     # validate subcommand config
                     cmd_config = cmd.validate_config(
