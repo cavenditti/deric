@@ -61,30 +61,6 @@ def add_missing_fields(
     return model
 
 
-"""
-    if not hasattr(model, "config_file"):
-        setattr(
-            model,
-            "config_file",
-            Field(
-                "config.toml",
-                description="Config file to use",
-            ),
-        )
-        model.__annotations__["config_file"] = str
-    if not hasattr(model, "logfile"):
-        setattr(
-            model,
-            "logfile",
-            Field(
-                "run.log",
-                description="Path of run log",
-            ),
-        )
-        model.__annotations__["logfile"] = str
-"""
-
-
 def model_from_dataclass(kls) -> Type[BaseModel]:
     """
     Converts a stdlib dataclass to a pydantic BaseModel
@@ -202,11 +178,32 @@ class Command(metaclass=CommandMeta):
         """
 
     @classmethod
-    def default_config(cls, _subcommand: Tuple[str, RuntimeConfig] | None = None, **kwargs):
+    def default_config(
+        cls, _subcommand: Tuple[str, RuntimeConfig] | None = None, **kwargs
+    ):
         """
         Get default config for command (and parents).
+
+        To specify extra args use prefixes for parent commands:
+            i.e. if you want to set a config for a `value` of a `sub` subcommand of a
+            `com` command, use `com_sub_value` as key.
         """
-        config_dict = model_from_dataclass(cls.Config).construct(**kwargs).dict()
+        # get prefix from all parents names
+        kls = cls
+        parents = [kls]
+        while kls.parent is not None:
+            parents.append(kls.parent)
+            kls = kls.parent
+        parents.reverse()
+        prefix = "_".join(map(lambda x: x.name, parents))
+        if prefix:
+            prefix = prefix + "_"
+
+        relevant = {
+            k.removeprefix(prefix): v for k, v in kwargs.items() if k.startswith(prefix)
+        }
+
+        config_dict = model_from_dataclass(cls.Config).construct(**relevant).dict()
 
         if _subcommand:
             config_dict[_subcommand[0]] = _subcommand[1]
@@ -214,7 +211,10 @@ class Command(metaclass=CommandMeta):
         own_config = make_namespace(config_dict)
 
         if cls.parent:
-            return cls.parent.default_config(_subcommand = (cls.name, own_config))
+            return cls.parent.default_config(
+                _subcommand=(cls.name, own_config),
+                **{k: v for k, v in kwargs.items() if not k.startswith(prefix)},
+            )
         else:
             return own_config
 

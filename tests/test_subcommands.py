@@ -140,10 +140,22 @@ options:
     )
 
 
-def test_subcomman_default_config():
+def test_subcommand_default_config():
     args = ["main.py"]
     with mock.patch('sys.argv', args):
         config = Subsub.default_config()
         assert isinstance(config, RuntimeConfig)
+        assert config.nested.subsub.unused == 12
+        assert config.unused == 99
+
+
+def test_subcommand_default_config_extra():
+    args = ["main.py"]
+    with mock.patch('sys.argv', args):
+        config = Subsub.default_config(
+                your_simple_app_nested_subsub_string="astring"
+                )
+        assert isinstance(config, RuntimeConfig)
+        assert config.nested.subsub.string == "astring"
         assert config.nested.subsub.unused == 12
         assert config.unused == 99
