@@ -14,7 +14,7 @@ import argparse
 from collections.abc import Iterable
 import logging
 from types import SimpleNamespace
-from typing import Any, Type
+from typing import Any, Tuple, Type
 from pydantic.dataclasses import dataclass as pydantic_dataclass
 from copy import deepcopy
 
@@ -156,7 +156,7 @@ class Command(metaclass=CommandMeta):
             self.__class__.Config = _empty
 
         super().__init__()
-        if self.is_subcommand:
+        if self.parent:
             return
 
         parser = self._populate_subcommands()
@@ -188,8 +188,12 @@ class Command(metaclass=CommandMeta):
             pass
 
     @property
-    def is_subcommand(self) :
-        return self.parent is not None
+    @classmethod
+    def is_subcommand(cls):
+        """
+        Same as checking cls.parent
+        """
+        return cls.parent is not None
 
     @abc.abstractmethod
     def run(self, config: RuntimeConfig):
@@ -197,9 +201,22 @@ class Command(metaclass=CommandMeta):
         Function to run for the command
         """
 
-    def default_config(self):
-        return {}
-        #if self.is_subcommand
+    @classmethod
+    def default_config(cls, _subcommand: Tuple[str, RuntimeConfig] | None = None, **kwargs):
+        """
+        Get default config for command (and parents).
+        """
+        config_dict = model_from_dataclass(cls.Config).construct(**kwargs).dict()
+
+        if _subcommand:
+            config_dict[_subcommand[0]] = _subcommand[1]
+
+        own_config = make_namespace(config_dict)
+
+        if cls.parent:
+            return cls.parent.default_config(_subcommand = (cls.name, own_config))
+        else:
+            return own_config
 
     @classmethod
     def _populate_arguments(
@@ -327,9 +344,12 @@ class Command(metaclass=CommandMeta):
                     cmd_config = cmd.validate_config(
                         {
                             # FIXME this needs a complete reworking
-                            k.removeprefix(cls.name + "_").removeprefix(cmd.name + "_"): v
+                            k.removeprefix(cls.name + "_").removeprefix(
+                                cmd.name + "_"
+                            ): v
                             for k, v in relevant.items()
-                            if k.startswith(cmd.name + "_") or k.startswith(f"{cls.name}_{cmd.name}_")
+                            if k.startswith(cmd.name + "_")
+                            or k.startswith(f"{cls.name}_{cmd.name}_")
                         },
                         cmds,
                     )
@@ -348,7 +368,7 @@ class Command(metaclass=CommandMeta):
 
         Should always be called on main command
         """
-        if self.is_subcommand:
+        if self.parent:
             raise RuntimeError("Run main command instead")
 
         for command in self._subcmd_to_run:

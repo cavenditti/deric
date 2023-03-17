@@ -36,5 +36,3 @@ string = "aaa"
         SimpleApp().start()
     captured = capsys.readouterr()
     assert captured.out == "20 aaa 14\n"
-
-

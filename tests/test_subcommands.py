@@ -1,7 +1,7 @@
 import mock
 import pytest
 
-from deric import Command, arg
+from deric import Command, RuntimeConfig, arg
 
 
 class Greet(Command):
@@ -29,6 +29,7 @@ class Subsub(Command):
 
     class Config:
         nested_arg: str = arg(..., "nested arg to print")
+        unused: int = arg(12, "unused int", cli=False)
 
     def run(self, config):
         print("I'm nested,", config.nested.subsub.nested_arg)
@@ -53,6 +54,7 @@ class SimpleApp(Command):
 
     class Config:
         string: str = arg(..., "some value")
+        unused: int = arg(99, "unused int", cli=False)
 
     def run(self, config):
         print("Runnig your_simple_app", config.string)
@@ -136,3 +138,12 @@ options:
                         nested arg to print
 """
     )
+
+
+def test_subcomman_default_config():
+    args = ["main.py"]
+    with mock.patch('sys.argv', args):
+        config = Subsub.default_config()
+        assert isinstance(config, RuntimeConfig)
+        assert config.nested.subsub.unused == 12
+        assert config.unused == 99

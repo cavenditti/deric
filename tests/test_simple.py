@@ -2,7 +2,7 @@ import mock
 from pydantic import ValidationError
 import pytest
 
-from deric import Command, arg
+from deric import Command, RuntimeConfig, arg
 
 # define a simple app
 class SimpleApp(Command):
@@ -53,6 +53,15 @@ def test_simple_app_invalid(capsys):
 your_simple_app: error: unrecognized arguments: --no-cli 32
 """
 )
+
+def test_default_config():
+    args = ["main.py"]
+    with mock.patch('sys.argv', args):
+        config = SimpleApp.default_config()
+        assert isinstance(config, RuntimeConfig)
+        assert config.value == 7
+        assert not config.minus
+        assert config.no_cli == 20
 
 
 # define a simple app with no configuration
