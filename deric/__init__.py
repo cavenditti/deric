@@ -121,6 +121,7 @@ class Command(abc.ABC):
             deepcopy(Config), "logfile", str, default, "Path of run log"
         )
         return kls
+
     # "config_file", str, "config.toml", "Config file to use"
 
     def __init__(self, is_subcommand=False) -> None:
@@ -180,6 +181,7 @@ class Command(abc.ABC):
         cls,
         *,
         parser: argparse.ArgumentParser,
+        prefix="",
     ) -> argparse.ArgumentParser:
         """
         Create argparse ArgumentParser from model fields
@@ -200,7 +202,9 @@ class Command(abc.ABC):
                     + name.replace("_", "-"),  # long form
                 ],
                 {
-                    "dest": name if cls.name == parser.prog else f"{cls.name}_{name}",
+                    "dest": name
+                    if cls.name == parser.prog
+                    else f"{prefix}{cls.name}_{name}",
                     "type": field.type_ if field.type_ in (int, float, str) else str,
                     "action": "append"
                     if field.annotation in (set[str], list[str])
@@ -265,7 +269,7 @@ class Command(abc.ABC):
             # new_subcommand.set_defaults(func=cmd.run)
 
             # also populate arguments
-            cmd._populate_arguments(parser=new_subcommand)
+            cmd._populate_arguments(parser=new_subcommand, prefix=cls.name + "_")
 
             if cmd.subcommands:
                 cmd._populate_subcommands(parser=new_subcommand)
@@ -297,9 +301,10 @@ class Command(abc.ABC):
                     # validate subcommand config
                     cmd_config = cmd.validate_config(
                         {
-                            k.replace(cmd.name + "_", ""): v
+                            # FIXME this needs a complete reworking
+                            k.removeprefix(cls.name + "_").removeprefix(cmd.name + "_"): v
                             for k, v in relevant.items()
-                            if k.startswith(cmd.name + "_")
+                            if k.startswith(cmd.name + "_") or k.startswith(f"{cls.name}_{cmd.name}_")
                         },
                         cmds,
                     )
