@@ -28,6 +28,7 @@ def test_simple_app_config(capsys, tmp_path):
         file.write(
             """
 string = "aaa"
+value = 3
 """
         )
 
@@ -35,7 +36,7 @@ string = "aaa"
     with mock.patch("sys.argv", args):
         SimpleApp().start()
     captured = capsys.readouterr()
-    assert captured.out == "20 aaa 14\n"
+    assert captured.out == "20 aaa 6\n"
 
 
 def test_runtime_config_to_dict():

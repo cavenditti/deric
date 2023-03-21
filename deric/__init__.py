@@ -30,7 +30,7 @@ class RuntimeConfig(SimpleNamespace):
         Recursively convert to dict
         """
         d = {}
-        for k,v in vars(self).items():
+        for k, v in vars(self).items():
             if isinstance(v, RuntimeConfig):
                 d[k] = v.to_dict()
             else:
@@ -160,8 +160,22 @@ class Command(metaclass=CommandMeta):
             path = config["config_file"]
             with open(path, "r") as file:
                 tomlconfig = parse(file.read())
-                config = dict(tomlconfig)
-            config.update((k, v) for k, v in vars(args).items() if v is not None)
+                file_config = dict(tomlconfig)
+
+            # Update config with values from cli (they should take precedence over config files).
+            defaults = self.default_config().to_dict()
+            args_config = {
+                k: v
+                for k, v in vars(args).items()
+                if v is not None
+                and k != "config_file"
+                and (k not in defaults or v != defaults[k])
+                # FIXME the special handling of "config_file" is really ugly
+            }
+            defaults.update(file_config)
+            defaults.update(args_config)
+            config = defaults
+            config["config_file"] = path
 
         self._subcmd_to_run: list[Command] = [self]
         config = self.validate_config(config, self._subcmd_to_run)
