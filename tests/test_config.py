@@ -1,5 +1,6 @@
 import os
 import mock
+import pytest
 
 from deric import Command, RuntimeConfig, arg
 
@@ -53,3 +54,59 @@ def test_runtime_config_to_dict():
             },
         },
     }
+
+
+def test_subcommands_file_config(capsys, tmp_path):
+    config_file = os.path.join(tmp_path, "config.toml")
+    with open(os.path.join(tmp_path, "config.toml"), "w") as file:
+        file.write(
+            """
+string = "wasd"
+
+[nested.subsub]
+nested_arg = "q"
+"""
+        )
+
+    class Subsub(Command):
+        name = "subsub"
+        description = "Print 'I'm nested'"
+
+        class Config:
+            nested_arg: str = arg(..., "nested arg to print")
+            unused: int = arg(12, "unused int", cli=False)
+
+        def run(self, config):
+            print("I'm nested,", config.nested.subsub.nested_arg)
+
+
+    class Nested(Command):
+        name = "nested"
+        description = "Print 'nested'"
+
+        subcommands = [Subsub]
+
+        def run(self, config):
+            print("nested")
+
+
+    # define a simple app with a subcommand
+    class SimpleApp(Command):
+        name = "your_simple_app"
+        description = "Print a value and exit"
+
+        subcommands = [Nested]
+
+        class Config:
+            string: str = arg(..., "some value")
+            unused: int = arg(99, "unused int", cli=False)
+            config_file: str = arg("", "config file path")
+
+        def run(self, config):
+            print("Runnig your_simple_app", config.string)
+
+    args = f"main.py --config-file {config_file} nested subsub".split()
+    with mock.patch("sys.argv", args):
+        SimpleApp().start()
+    captured = capsys.readouterr()
+    assert captured.out == "Runnig your_simple_app wasd\nnested\nI'm nested, q\n"

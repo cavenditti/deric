@@ -38,7 +38,7 @@ class RuntimeConfig(SimpleNamespace):
         return d
 
 
-def make_namespace(d):
+def make_namespace(d: Any):
     """
     Recursively convert dict to namespace
     """
@@ -364,17 +364,21 @@ class Command(metaclass=CommandMeta):
                     # instantiate subcommand and put run method in the queue
                     cmds.append(cmd())
 
-                    # validate subcommand config
-                    cmd_config = cmd.validate_config(
+                    # FIXME this needs a complete reworking
+                    command_dict = (relevant[cmd.name] if cmd.name in relevant else {})
+                    command_dict.update(
                         {
-                            # FIXME this needs a complete reworking
                             k.removeprefix(cls.name + "_").removeprefix(
                                 cmd.name + "_"
                             ): v
                             for k, v in relevant.items()
                             if k.startswith(cmd.name + "_")
                             or k.startswith(f"{cls.name}_{cmd.name}_")
-                        },
+                        })
+
+                    # validate subcommand config
+                    cmd_config = cmd.validate_config(
+                        command_dict,
                         cmds,
                     )
                     # remove subcommand keys from main config
