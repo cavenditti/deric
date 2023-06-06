@@ -37,6 +37,12 @@ class RuntimeConfig(SimpleNamespace):
                 d[k] = v
         return d
 
+    def __str__(self) -> str:
+        """
+        Pretty printing
+        """
+        return self.to_dict().__str__()
+
 
 def make_namespace(d: Any):
     """
