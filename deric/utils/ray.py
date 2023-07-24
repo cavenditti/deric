@@ -23,34 +23,38 @@ def parallel(
     """
     result_refs = []
     iter_on = tqdm(range(len(on)), smoothing=0) if not _disable_tqdm else range(len(on))
+
+    def ready_get(refs):
+        ready = ray.get(refs)
+        for single in ready:
+            try:
+                then(single)
+            except Exception as e:  # ignore fails on single items
+                logging.exception(e)
+                if __debug__:
+                    raise e
+
     for i in iter_on:
         if len(result_refs) > _max_tasks:
             # update result_refs to only
             # track the remaining tasks.
             ready_refs, result_refs = ray.wait(result_refs, num_returns=1)
-            ready = ray.get(ready_refs)
-            for single in ready:
-                try:
-                    then(single)
-                except Exception as e:  # ignore fails on single items
-                    logging.exception(e)
-                    if __debug__:
-                        raise e
+            ready_get(ready_refs)
 
         result_refs.append(do.remote(on[i], **kwargs))
-    ready = ray.get(result_refs)
-    for single in ready:
-        try:
-            then(single)
-        except Exception as e:  # ignore fails on single items
-            logging.exception(e)
+
+        # get any possible remaining task on last iteration
+        # the reason for doing it here is to prevent outputting things
+        #   after we exit the progress bar context.
+        if i == len(on) - 1:
+            ready_get(result_refs)
 
 
 def chunk(xs: list, chunk_size) -> list[list]:
     """
     Splits an iterable evenly in chunks
     """
-    return [xs[i:i+chunk_size] for i in range(0, len(xs) or 1, max(1,chunk_size))]
+    return [xs[i : i + chunk_size] for i in range(0, len(xs) or 1, max(1, chunk_size))]
 
 
 @contextmanager
