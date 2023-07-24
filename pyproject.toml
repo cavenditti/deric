@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "deric"
-version = "0.1.0"
+version = "0.1.1"
 description = "Declarative rich CLI"
 authors = ["Carlo Antonio Venditti <c.a.venditti@pm.me>"]
 license = "MIT"

@@ -4,7 +4,7 @@ from contextlib import contextmanager
 from datetime import datetime
 import time
 
-from tqdm import tqdm
+from tqdm.rich import tqdm
 import ray
 
 from deric.utils.logging import console
