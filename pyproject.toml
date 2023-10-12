@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "deric"
-version = "0.1.2"
+version = "0.2.0"
 description = "Declarative rich CLI"
 authors = ["Carlo Antonio Venditti <c.a.venditti@pm.me>"]
 license = "MIT"
@@ -9,7 +9,7 @@ readme = "README.md"
 [tool.poetry.dependencies]
 python = "^3.10"
 tqdm = "^4.65.0"
-pydantic = "^1.10.6"
+pydantic = "^2.4.0"
 rich = "^13.3.2"
 tomlkit = "^0.11.6"
 
