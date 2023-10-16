@@ -38,12 +38,6 @@ class RuntimeConfig(SimpleNamespace):
                 d[k] = v
         return d
 
-    def __str__(self) -> str:
-        """
-        Pretty printing
-        """
-        return self.to_dict().__str__()
-
 
 def make_namespace(d: Any):
     """
@@ -56,26 +50,18 @@ def make_namespace(d: Any):
 
 
 def add_missing_fields(
-    model: Type,
+    model_def: dict,
     field: str,
     field_type: Type,
     default: Any,
     description,
-) -> Type:
+) -> dict:
     """
     Adds missing attributes to dataclass.
     """
-    if not hasattr(model, field):
-        setattr(
-            model,
-            field,
-            Field(
-                default,
-                description=description,
-            ),
-        )
-        model.__annotations__[field] = field_type
-    return model
+    if field not in model_def:
+        model_def[field] = arg(field_type, default, description)
+    return model_def
 
 
 _EMPTY = {}
@@ -112,15 +98,15 @@ class Command(metaclass=CommandMeta):
             subcmd.set_parent(cls)
 
     @classmethod
-    def with_logfile(cls, default="run.log") -> Type[Command]:
-        # Add config, logfile, etc if it's the main command
+    def with_log_file(cls, default="run.log") -> Type[Command]:
+        # Add config, log, etc if it's the main command
         kls = deepcopy(cls)
 
         # allow with no explicit Config
         Config = cls.Config if hasattr(cls, "Config") else _EMPTY
 
         kls.Config = add_missing_fields(
-            deepcopy(Config), "logfile", str, default, "Path of run log"
+            deepcopy(Config), "log_file", str, default, "Path of run log"
         )
         return kls
 
@@ -149,10 +135,9 @@ class Command(metaclass=CommandMeta):
         config = vars(args)
 
         # Good-looking logging to console and file
-        # FIXME how to handle config_file and logfile if not
-        #   specified in the Command subclass config?
-        if "logfile" in config:
-            setup_logging(config["logfile"])
+        # TODO how to handle config_file and log_file if not specified in the Command subclass config?
+        if "log_file" in config:
+            setup_logging(config["log_file"])
 
         if "config_file" in config:
             path = config["config_file"]
@@ -186,7 +171,6 @@ class Command(metaclass=CommandMeta):
         except AttributeError:
             pass
 
-    @property
     @classmethod
     def is_subcommand(cls):
         """
