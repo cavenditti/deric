@@ -1,5 +1,4 @@
-"""
-Improved cli definition experience.
+"""Improved cli definition experience.
 
 Allows defining CLI commands in Pydantic-way, with automatic argparse and toml config
 file definitions and parsing.
@@ -15,20 +14,21 @@ from collections.abc import Iterable
 import logging
 from types import SimpleNamespace
 from typing import Any, Tuple, Type
-from pydantic.dataclasses import dataclass as pydantic_dataclass
 from copy import deepcopy
+from pydantic.fields import FieldInfo
+from pydantic_core import PydanticUndefined
 
 from tomlkit import parse
-from pydantic import BaseModel, ConfigDict, Extra, Field
+from pydantic import Field, create_model
 
-from deric.utils.logging import setup_logging
+from deric.logs import setup_logging
 
 
 class RuntimeConfig(SimpleNamespace):
+    """Runtime configuration."""
+
     def to_dict(self):
-        """
-        Recursively convert to dict
-        """
+        """Recursively convert to dict."""
         d = {}
         for k, v in vars(self).items():
             if isinstance(v, RuntimeConfig):
@@ -37,115 +37,83 @@ class RuntimeConfig(SimpleNamespace):
                 d[k] = v
         return d
 
-    def __str__(self) -> str:
-        """
-        Pretty printing
-        """
-        return self.to_dict().__str__()
-
 
 def make_namespace(d: Any):
-    """
-    Recursively convert dict to namespace
-    """
+    """Recursively convert dict to namespace."""
     if isinstance(d, dict):
         return RuntimeConfig(**{k: make_namespace(v) for k, v in d.items()})
-    else:
-        return d
+    return d
 
 
 def add_missing_fields(
-    model: Type,
+    model_def: dict,
     field: str,
     field_type: Type,
     default: Any,
     description,
-) -> Type:
+) -> dict:
+    """Add missing attributes to dataclass."""
+    if field not in model_def:
+        model_def[field] = arg(field_type, default, description)
+    return model_def
+
+
+class _CommandMeta(abc.ABCMeta):
+    """Metaclass for Command classes.
+
+    Used to automatically set parents of a subcommand
     """
-    Adds missing attributes to dataclass.
-    """
-    if not hasattr(model, field):
-        setattr(
-            model,
-            field,
-            Field(
-                default,
-                description=description,
-            ),
-        )
-        model.__annotations__[field] = field_type
-    return model
 
-
-def model_from_dataclass(kls) -> Type[BaseModel]:
-    """
-    Converts a stdlib dataclass to a pydantic BaseModel
-    """
-    # TODO not using BaseSettings anymore means we need to manually get env variables
-    return pydantic_dataclass(
-        kls, config=ConfigDict(extra=Extra.allow)
-    ).__pydantic_model__
-
-
-class _empty:
-    pass
-
-
-class CommandMeta(abc.ABCMeta):
     def __new__(cls, name, bases, dct):
         x = super().__new__(cls, name, bases, dct)
         x.set_parent(None)
         return x
 
 
-class Command(metaclass=CommandMeta):
-    """
-    Generic CLI command.
-    """
+class Command(metaclass=_CommandMeta):
+    """Generic CLI command."""
 
     name: str
     description: str
-    Config: Type
+
+    Config: dict[str, tuple[type, Any]]
+
     subcommands: Iterable[Type[Command]] = set()
 
     parent: Type[Command] | None = None
 
     @classmethod
     def set_parent(cls, parent):
-        """
-        Recursively set parent commands
-        """
+        """Recursively set parent commands."""
         cls.parent = parent
         for subcmd in cls.subcommands:
             subcmd.set_parent(cls)
 
     @classmethod
-    def with_logfile(cls, default="run.log") -> Type[Command]:
-        # Add config, logfile, etc if it's the main command
+    def _with_log_file(cls, default="run.log") -> Type[Command]:
+        # Add config, log, etc if it's the main command
         kls = deepcopy(cls)
 
         # allow with no explicit Config
-        Config = cls.Config if hasattr(cls, "Config") else _empty
+        config = cls.Config if hasattr(cls, "Config") else {}
 
         kls.Config = add_missing_fields(
-            deepcopy(Config), "logfile", str, default, "Path of run log"
+            deepcopy(config), "log_file", str, default, "Path of run log",
         )
         return kls
 
     # "config_file", str, "config.toml", "Config file to use"
 
     def __init__(self) -> None:
-        """
-        Parse and validate settings on object instantiation
+        """Parse and validate settings on object instantiation.
 
         `Command` configs are validated using Pydantic and `config` attribute is set
         with a `RuntimeConfig` generated from it.
         """
-
         # add missing fields if not specified by user. Methods using these are
         # classmethods so this must be done on the class and not the instance.
         if not hasattr(self.__class__, "Config"):
-            self.__class__.Config = _empty
+            self.__class__.Config = {}
 
         super().__init__()
         if self.parent:
@@ -157,10 +125,9 @@ class Command(metaclass=CommandMeta):
         config = vars(args)
 
         # Good-looking logging to console and file
-        # FIXME how to handle config_file and logfile if not
-        #   specified in the Command subclass config?
-        if "logfile" in config:
-            setup_logging(config["logfile"])
+        # TODO how to handle config_file and log_file if not specified in the Command subclass config?
+        if "log_file" in config:
+            setup_logging(config["log_file"])
 
         if "config_file" in config:
             path = config["config_file"]
@@ -176,6 +143,7 @@ class Command(metaclass=CommandMeta):
                 if v is not None
                 and k != "config_file"
                 and (k not in defaults or v != defaults[k])
+                and v != PydanticUndefined
                 # FIXME the special handling of "config_file" is really ugly
             }
             defaults.update(file_config)
@@ -184,8 +152,8 @@ class Command(metaclass=CommandMeta):
             config["config_file"] = path
 
         self._subcmd_to_run: list[Command] = [self]
-        config = self.validate_config(config, self._subcmd_to_run)
-        self.config: RuntimeConfig = make_namespace(config)
+        validated_config = self.validate_config(config, self._subcmd_to_run)
+        self.config: RuntimeConfig = make_namespace(validated_config)
 
         try:
             # update logging configuration after having read the config file
@@ -193,31 +161,20 @@ class Command(metaclass=CommandMeta):
         except AttributeError:
             pass
 
-    @property
     @classmethod
     def is_subcommand(cls):
-        """
-        Same as checking cls.parent
-        """
+        """Check if cls.parent is not None."""
         return cls.parent is not None
 
     @abc.abstractmethod
     def run(self, config: RuntimeConfig):
-        """
-        Function to run for the command
-        """
+        """Run for the command."""
 
     @classmethod
     def default_config(
-        cls, _subcommand: Tuple[str, RuntimeConfig] | None = None, **kwargs
+        cls, _subcommand: Tuple[str, RuntimeConfig] | None = None, *, validate=False, **kwargs,
     ):
-        """
-        Get default config for command (and parents).
-
-        To specify extra args use prefixes for parent commands:
-            i.e. if you want to set a config for a `value` of a `sub` subcommand of a
-            `com` command, use `com_sub_value` as key.
-        """
+        """Get default config for command (and parents)."""
         # get prefix from all parents names
         kls = cls
         parents = [kls]
@@ -225,7 +182,7 @@ class Command(metaclass=CommandMeta):
             parents.append(kls.parent)
             kls = kls.parent
         parents.reverse()
-        prefix = "_".join(map(lambda x: x.name, parents))
+        prefix = "_".join((x.name for x in parents))
         if prefix:
             prefix = prefix + "_"
 
@@ -233,7 +190,12 @@ class Command(metaclass=CommandMeta):
             k.removeprefix(prefix): v for k, v in kwargs.items() if k.startswith(prefix)
         }
 
-        config_dict = model_from_dataclass(cls.Config).construct(**relevant).dict()
+        config_model = create_model("config", **cls.Config)
+        if validate:
+            config_model_instance = config_model(**relevant)
+        else:
+            config_model_instance = config_model.model_construct(**relevant)
+        config_dict = config_model_instance.model_dump()
 
         if _subcommand:
             config_dict[_subcommand[0]] = _subcommand[1]
@@ -245,8 +207,7 @@ class Command(metaclass=CommandMeta):
                 _subcommand=(cls.name, own_config),
                 **{k: v for k, v in kwargs.items() if not k.startswith(prefix)},
             )
-        else:
-            return own_config
+        return own_config
 
     @classmethod
     def _populate_arguments(
@@ -255,18 +216,17 @@ class Command(metaclass=CommandMeta):
         parser: argparse.ArgumentParser,
         prefix="",
     ) -> argparse.ArgumentParser:
-        """
-        Create argparse ArgumentParser from model fields
+        """Create argparse ArgumentParser from model fields.
 
         Args:
+        ----
             parser: parser to use (means we're in a subparser)
         """
         # Add Pydantic model to an ArgumentParser
         if not hasattr(cls, "Config"):
-            cls.Config = _empty
-        fields = model_from_dataclass(cls.Config).__fields__
+            cls.Config = {}
 
-        def parser_args(name, field) -> tuple[list, dict]:
+        def parser_args(name: str, ftype: type, field: FieldInfo) -> tuple[list, dict]:
             return (
                 [
                     # "-" + name[0],  # short form
@@ -277,25 +237,29 @@ class Command(metaclass=CommandMeta):
                     "dest": name
                     if cls.name == parser.prog
                     else f"{prefix}{cls.name}_{name}",
-                    "type": field.type_ if field.type_ in (int, float, str) else str,
+                    "type": ftype if ftype in (int, float, str) else str,
                     "action": "append"
-                    if field.annotation in (set[str], list[str])
+                    if ftype in (set[str], list[str])
                     else "store",
                     "default": field.default,
-                    "help": field.field_info.description,
+                    "help": field.description,
                 },
             )
 
         # Turn the fields of the model as arguments of the parser
-        for name, field in fields.items():
+        for name, (ftype, field) in cls.Config.items():
             # ignore fields not marked to be ignored in cli
-            if "cli" in field.field_info.extra and not field.field_info.extra["cli"]:
+            if (
+                field.json_schema_extra
+                and "cli" in field.json_schema_extra
+                and not field.json_schema_extra["cli"]
+            ):
                 continue
 
-            args, kwargs = parser_args(name, field)
+            args, kwargs = parser_args(name, ftype, field)
 
             # booleans are special
-            if field.type_ == bool:
+            if ftype == bool:
                 kwargs.pop("type")  # no type when using `store_true`
                 kwargs["action"] = "store_true"
 
@@ -307,9 +271,7 @@ class Command(metaclass=CommandMeta):
 
     @classmethod
     def _populate_subcommands(cls, parser: argparse.ArgumentParser | None = None):
-        """
-        Add subcommands and relative arguments to argparse parser
-        """
+        """Add subcommands and relative arguments to argparse parser."""
         parser = (
             argparse.ArgumentParser(
                 prog=cls.name,
@@ -333,7 +295,7 @@ class Command(metaclass=CommandMeta):
             help="addtional help",
         )
 
-        # if main_cmd and isinstance(field.type_, ModelMetaclass):
+        # if main_cmd and isinstance(field.type, ModelMetaclass):
         for cmd in cls.subcommands:
             # create new subparsers
             new_subcommand = subparsers.add_parser(cmd.name, help=cmd.description)
@@ -349,13 +311,13 @@ class Command(metaclass=CommandMeta):
 
     @classmethod
     def validate_config(cls, relevant: dict, cmds: list[Command]) -> dict:
-        """
-        Parse and validate config.
+        """Parse and validate config.
 
         Command configs are validated using Pydantic and a dict is returned.
         """
-        Config = model_from_dataclass(cls.Config)
-        config = Config(**relevant).dict()
+        config_model = create_model("config", **cls.Config)
+        config_model_instance = config_model(**relevant)
+        config = config_model_instance.model_dump()
 
         # FIXME this is needed because of the way we handle relevant configs
         # below (when we recursively call validate_config).
@@ -371,16 +333,17 @@ class Command(metaclass=CommandMeta):
                     cmds.append(cmd())
 
                     # FIXME this needs a complete reworking
-                    command_dict = (relevant[cmd.name] if cmd.name in relevant else {})
+                    command_dict = relevant[cmd.name] if cmd.name in relevant else {}
                     command_dict.update(
                         {
                             k.removeprefix(cls.name + "_").removeprefix(
-                                cmd.name + "_"
+                                cmd.name + "_",
                             ): v
                             for k, v in relevant.items()
                             if k.startswith(cmd.name + "_")
                             or k.startswith(f"{cls.name}_{cmd.name}_")
-                        })
+                        },
+                    )
 
                     # validate subcommand config
                     cmd_config = cmd.validate_config(
@@ -397,8 +360,7 @@ class Command(metaclass=CommandMeta):
         return config
 
     def start(self):
-        """
-        Call `cmd.run()` for each subcommand
+        """Call `cmd.run()` for each subcommand.
 
         Should always be called on main command
         """
@@ -410,8 +372,10 @@ class Command(metaclass=CommandMeta):
             command.run(self.config)
 
 
-def arg(default, description, **kwargs):
-    """
-    Shortcut for pydantic.Field
-    """
-    return Field(default, description=description, **kwargs)
+def arg(argtype, default, description, **kwargs):
+    """Shortcut for pydantic.Field, returning a tuple to pass to create_model."""
+    return (argtype, Field(default=default, description=description, json_schema_extra=kwargs))
+
+def config(**kwargs):
+    """Alternative to writing arg each time, doesn't support extra keyword arguments."""
+    return {k:arg(*v) for k,v in kwargs.items()}

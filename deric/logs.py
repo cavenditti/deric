@@ -9,14 +9,12 @@ console = Console()
 
 
 def setup_logging(logfile: str):
-    """
-    Setup logging, with logfile in data dir and rich console output
-    """
-    # FORMAT = "%(asctime)s %(levelname)-1.1s %(message)s"
-    FORMAT = "%(asctime)s %(message)s"
+    """Setup logging, with logfile in data dir and rich console output."""
+    # format = "%(asctime)s %(levelname)-1.1s %(message)s"
+    format = "%(asctime)s %(message)s"
     logging.basicConfig(
         level="NOTSET",
-        format=FORMAT,
+        format=format,
         datefmt="[%X]",
         handlers=[
             RichHandler(show_time=False, show_level=True),
