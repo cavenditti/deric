@@ -18,7 +18,7 @@ def test_logging(tmp_path):
     log_file = os.path.join(tmp_path, "test.log")
     args = f"main.py --log-file {log_file}".split()
     with mock.patch("sys.argv", args):
-        SimpleApp.with_log_file(default="test.log")().start()
+        SimpleApp._with_log_file(default="test.log")().start()
     with open(log_file, "r") as file:
         logtext = file.read()
     assert logtext == ("""""")
