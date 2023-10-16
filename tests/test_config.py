@@ -13,12 +13,13 @@ def test_simple_app_config(capsys, tmp_path):
         name = "your_simple_app"
         description = "Print a value and exit"
 
-        class Config:
-            string: str = arg(..., "value to print")
-            value: int = arg(7, "value to double and print")
-            minus: bool = arg(False, "boolean to print")
-            no_cli: int = arg(20, "not accessible from the cli", cli=False)
-            config_file: str = arg(..., "config file path")
+        Config = {
+            "string": arg(str, ..., "value to print"),
+            "value": arg(int, 7, "value to double and print"),
+            "minus": arg(bool, False, "boolean to print"),
+            "no_cli": arg(int, 20, "not accessible from the cli", cli=False),
+            "config_file": arg(str, ..., "config file path"),
+        }
 
         def run(self, config):
             print(
@@ -72,9 +73,10 @@ nested_arg = "q"
         name = "subsub"
         description = "Print 'I'm nested'"
 
-        class Config:
-            nested_arg: str = arg(..., "nested arg to print")
-            unused: int = arg(12, "unused int", cli=False)
+        Config = {
+            "nested_arg": arg(str, ..., "nested arg to print"),
+            "unused": arg(int, 12, "unused int", cli=False),
+        }
 
         def run(self, config):
             print("I'm nested,", config.nested.subsub.nested_arg)
@@ -97,10 +99,11 @@ nested_arg = "q"
 
         subcommands = [Nested]
 
-        class Config:
-            string: str = arg(..., "some value")
-            unused: int = arg(99, "unused int", cli=False)
-            config_file: str = arg("", "config file path")
+        Config = {
+            "string": arg(str, ..., "some value"),
+            "unused": arg(int, 99, "unused int", cli=False),
+            "config_file": arg(str, "", "config file path"),
+        }
 
         def run(self, config):
             print("Runnig your_simple_app", config.string)

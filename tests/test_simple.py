@@ -9,11 +9,12 @@ class SimpleApp(Command):
   name = "your_simple_app"
   description = "Print a value and exit"
 
-  class Config:
-    string: str = arg(..., "value to print")
-    value: int = arg(7, "value to double and print")
-    minus: bool = arg(False, "boolean to print")
-    no_cli: int = arg(20, "not accessible from the cli", cli=False) # FIXME broken atm
+  Config = {
+    "string": arg(str, ..., "value to print"),
+    "value": arg(int, 7, "value to double and print"),
+    "minus": arg(bool, False, "boolean to print"),
+    "no_cli": arg(int, 20, "not accessible from the cli", cli=False),
+    }
 
   def run(self, config):
     print(config.no_cli, config.string, config.value * (-2 if config.minus else 2))

@@ -1,7 +1,7 @@
 import mock
 import pytest
 
-from deric import Command, RuntimeConfig, arg
+from deric import Command, RuntimeConfig, arg, config
 
 
 class Greet(Command):
@@ -16,8 +16,9 @@ class Print(Command):
     name = "print"
     description = "Print a value"
 
-    class Config:
-        string: str = arg(..., "value to print")
+    Config = config(
+        string = (str, ..., "value to print"),
+    )
 
     def run(self, config):
         print(config.print.string)
@@ -27,9 +28,10 @@ class Subsub(Command):
     name = "subsub"
     description = "Print 'I'm nested'"
 
-    class Config:
-        nested_arg: str = arg(..., "nested arg to print")
-        unused: int = arg(12, "unused int", cli=False)
+    Config = {
+        "nested_arg": arg(str, ..., "nested arg to print"),
+        "unused": arg(int, 12, "unused int", cli=False),
+    }
 
     def run(self, config):
         print("I'm nested,", config.nested.subsub.nested_arg)
@@ -52,9 +54,12 @@ class SimpleApp(Command):
 
     subcommands = [Greet, Print, Nested]
 
-    class Config:
-        string: str = arg(..., "some value")
-        unused: int = arg(99, "unused int", cli=False)
+
+    Config = {
+        "string": arg(str, ..., "some value"),
+        "unused": arg(int, 99, "unused int", cli=False),
+    }
+
 
     def run(self, config):
         print("Runnig your_simple_app", config.string)

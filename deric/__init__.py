@@ -20,7 +20,7 @@ from copy import deepcopy
 from pydantic.fields import FieldInfo
 
 from tomlkit import parse
-from pydantic import BaseModel, ConfigDict, Field, TypeAdapter
+from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, create_model
 
 from deric.utils.logging import setup_logging
 
@@ -78,8 +78,7 @@ def add_missing_fields(
     return model
 
 
-class _empty:
-    pass
+_EMPTY = {}
 
 
 class CommandMeta(abc.ABCMeta):
@@ -97,7 +96,8 @@ class Command(metaclass=CommandMeta):
     name: str
     description: str
 
-    Config: Type
+    Config: dict[str, tuple[type, Any]]
+
     subcommands: Iterable[Type[Command]] = set()
 
     parent: Type[Command] | None = None
@@ -117,7 +117,7 @@ class Command(metaclass=CommandMeta):
         kls = deepcopy(cls)
 
         # allow with no explicit Config
-        Config = cls.Config if hasattr(cls, "Config") else _empty
+        Config = cls.Config if hasattr(cls, "Config") else _EMPTY
 
         kls.Config = add_missing_fields(
             deepcopy(Config), "logfile", str, default, "Path of run log"
@@ -137,7 +137,7 @@ class Command(metaclass=CommandMeta):
         # add missing fields if not specified by user. Methods using these are
         # classmethods so this must be done on the class and not the instance.
         if not hasattr(self.__class__, "Config"):
-            self.__class__.Config = _empty
+            self.__class__.Config = _EMPTY
 
         super().__init__()
         if self.parent:
@@ -225,7 +225,9 @@ class Command(metaclass=CommandMeta):
             k.removeprefix(prefix): v for k, v in kwargs.items() if k.startswith(prefix)
         }
 
-        config_dict = cls.Config(**relevant).dict()
+        config_model = create_model("config", **cls.Config)
+        config_model_instance = config_model(**relevant)
+        config_dict = config_model_instance.model_dump()
 
         if _subcommand:
             config_dict[_subcommand[0]] = _subcommand[1]
@@ -255,11 +257,9 @@ class Command(metaclass=CommandMeta):
         """
         # Add Pydantic model to an ArgumentParser
         if not hasattr(cls, "Config"):
-            cls.Config = _empty
-        fields = dataclass(cls.Config).__dataclass_fields__
-        fields_detail = dataclass(cls.Config).__pydantic_fields__
+            cls.Config = _EMPTY
 
-        def parser_args(name, field) -> tuple[list, dict]:
+        def parser_args(name: str, ftype: type, field: FieldInfo) -> tuple[list, dict]:
             return (
                 [
                     # "-" + name[0],  # short form
@@ -270,29 +270,29 @@ class Command(metaclass=CommandMeta):
                     "dest": name
                     if cls.name == parser.prog
                     else f"{prefix}{cls.name}_{name}",
-                    "type": field.type if field.type in (int, float, str) else str,
+                    "type": ftype if ftype in (int, float, str) else str,
                     "action": "append"
-                    if field.type in (set[str], list[str])
+                    if ftype in (set[str], list[str])
                     else "store",
                     "default": field.default,
-                    "help": fields_detail[field.name].description,
+                    "help": field.description,
                 },
             )
 
         # Turn the fields of the model as arguments of the parser
-        for name, field in fields.items():
+        for name, (ftype, field) in cls.Config.items():
             # ignore fields not marked to be ignored in cli
             if (
-                fields_detail[field.name].json_schema_extra
-                and "cli" in fields_detail[field.name].json_schema_extra
-                and not fields_detail[field.name].json_schema_extra["cli"]
+                field.json_schema_extra
+                and "cli" in field.json_schema_extra
+                and not field.json_schema_extra["cli"]
             ):
                 continue
 
-            args, kwargs = parser_args(name, field)
+            args, kwargs = parser_args(name, ftype, field)
 
             # booleans are special
-            if field.type == bool:
+            if ftype == bool:
                 kwargs.pop("type")  # no type when using `store_true`
                 kwargs["action"] = "store_true"
 
@@ -351,12 +351,12 @@ class Command(metaclass=CommandMeta):
 
         Command configs are validated using Pydantic and a dict is returned.
         """
-        Config = TypeAdapter(cls.Config)
-
         # FIXME special handling for FieldInfo(s): crap code
         relevant = {k:v if not isinstance(v, FieldInfo) else v.default for k,v in relevant.items()}
 
-        config = Config.validate_python(cls.Config(**relevant)).__dict__
+        config_model = create_model("config", **cls.Config)
+        config_model_instance = config_model(**relevant)
+        config = config_model_instance.model_dump()
 
         # FIXME this is needed because of the way we handle relevant configs
         # below (when we recursively call validate_config).
@@ -412,8 +412,14 @@ class Command(metaclass=CommandMeta):
             command.run(self.config)
 
 
-def arg(default, description, **kwargs):
+def arg(argtype, default, description, **kwargs):
     """
-    Shortcut for pydantic.Field
+    Shortcut for pydantic.Field, returning a tuple to pass to create_model
     """
-    return Field(default=default, description=description, json_schema_extra=kwargs)
+    return (argtype, Field(default=default, description=description, json_schema_extra=kwargs))
+
+def config(**kwargs):
+    """
+    Alternative to writing arg each time, doesn't support extra keyword arguments.
+    """
+    return {k:arg(*v) for k,v in kwargs.items()}
