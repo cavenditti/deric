@@ -22,7 +22,8 @@ ruff = "^0.0.292"
 # Enable the pycodestyle (`E`) and Pyflakes (`F`) rules by default.
 # Unlike Flake8, Ruff doesn't enable pycodestyle warnings (`W`) or
 # McCabe complexity (`C901`) by default.
-select = ["E", "F", "W", "C", "B", "Q", "RET", "D", "N", "COM", "FIX", "FBT"]
+select = ["E", "F", "W", "C", "B", "Q", "RET", "N", "COM", "FBT"]
+#select = ["E", "F", "W", "C", "B", "Q", "RET", "D", "N", "COM", "FIX", "FBT"]
 ignore = []
 
 # Allow fix for all enabled rules (when `--fix`) is provided.

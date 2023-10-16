@@ -19,7 +19,7 @@ jobs:
         python -m pip install --upgrade pip
         pip install ruff pytest pytest-cov
         pip install -e .
-    - name: Analysing the code with ruff
+    - name: Check the code with ruff
       run: |
         ruff deric
     - name: Run tests with pytest

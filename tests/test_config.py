@@ -1,6 +1,5 @@
 import os
 import mock
-import pytest
 
 from deric import Command, RuntimeConfig, arg
 
