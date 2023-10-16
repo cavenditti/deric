@@ -5,7 +5,7 @@ import pytest
 from deric import Command, RuntimeConfig, arg
 
 
-def test_simple_app_config(capsys, tmp_path):
+def test_config_simple_app(capsys, tmp_path):
     config_file = os.path.join(tmp_path, "config.toml")
 
     # define a simple app
@@ -41,7 +41,7 @@ value = 3
     assert captured.out == "20 aaa 6\n"
 
 
-def test_runtime_config_to_dict():
+def test_config_runtime_config_to_dict():
     config = RuntimeConfig(
         x="2", y=23, z=RuntimeConfig(b="abc", c=RuntimeConfig(a="a"))
     )
@@ -57,7 +57,7 @@ def test_runtime_config_to_dict():
     }
 
 
-def test_subcommands_file_config(capsys, tmp_path):
+def test_config_subcommands_file(capsys, tmp_path):
     config_file = os.path.join(tmp_path, "config.toml")
     with open(os.path.join(tmp_path, "config.toml"), "w") as file:
         file.write(

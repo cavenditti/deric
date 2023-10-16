@@ -15,12 +15,12 @@ from collections.abc import Iterable
 import logging
 from types import SimpleNamespace
 from typing import Any, Tuple, Type
-from pydantic.dataclasses import dataclass
 from copy import deepcopy
 from pydantic.fields import FieldInfo
+from pydantic_core import PydanticUndefined
 
 from tomlkit import parse
-from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, create_model
+from pydantic import Field, create_model
 
 from deric.utils.logging import setup_logging
 
@@ -168,6 +168,7 @@ class Command(metaclass=CommandMeta):
                 if v is not None
                 and k != "config_file"
                 and (k not in defaults or v != defaults[k])
+                and v != PydanticUndefined
                 # FIXME the special handling of "config_file" is really ugly
             }
             defaults.update(file_config)
@@ -176,8 +177,8 @@ class Command(metaclass=CommandMeta):
             config["config_file"] = path
 
         self._subcmd_to_run: list[Command] = [self]
-        config = self.validate_config(config, self._subcmd_to_run)
-        self.config: RuntimeConfig = make_namespace(config)
+        validated_config = self.validate_config(config, self._subcmd_to_run)
+        self.config: RuntimeConfig = make_namespace(validated_config)
 
         try:
             # update logging configuration after having read the config file
@@ -201,14 +202,10 @@ class Command(metaclass=CommandMeta):
 
     @classmethod
     def default_config(
-        cls, _subcommand: Tuple[str, RuntimeConfig] | None = None, **kwargs
+        cls, _subcommand: Tuple[str, RuntimeConfig] | None = None, validate=False, **kwargs
     ):
         """
         Get default config for command (and parents).
-
-        To specify extra args use prefixes for parent commands:
-            i.e. if you want to set a config for a `value` of a `sub` subcommand of a
-            `com` command, use `com_sub_value` as key.
         """
         # get prefix from all parents names
         kls = cls
@@ -226,7 +223,10 @@ class Command(metaclass=CommandMeta):
         }
 
         config_model = create_model("config", **cls.Config)
-        config_model_instance = config_model(**relevant)
+        if validate:
+            config_model_instance = config_model(**relevant)
+        else:
+            config_model_instance = config_model.model_construct(**relevant)
         config_dict = config_model_instance.model_dump()
 
         if _subcommand:
@@ -351,8 +351,6 @@ class Command(metaclass=CommandMeta):
 
         Command configs are validated using Pydantic and a dict is returned.
         """
-        # FIXME special handling for FieldInfo(s): crap code
-        relevant = {k:v if not isinstance(v, FieldInfo) else v.default for k,v in relevant.items()}
 
         config_model = create_model("config", **cls.Config)
         config_model_instance = config_model(**relevant)

@@ -54,7 +54,6 @@ def test_simple_app_invalid(capsys):
 """your_simple_app: error: unrecognized arguments: --something 32"""
 )
 
-@pytest.mark.skip(reason="no_cli broken with pydantic v2")
 def test_simple_app_nocli(capsys):
     args = 'main.py --no-cli 32 --string abc'.split()
     with mock.patch('sys.argv', args):
@@ -70,8 +69,14 @@ your_simple_app: error: unrecognized arguments: --no-cli 32
 def test_default_config():
     args = ["main.py"]
     with mock.patch('sys.argv', args):
+        config = SimpleApp.default_config()
+        assert isinstance(config, RuntimeConfig)
+        assert config.value == 7
+        assert not config.minus
+        assert config.no_cli == 20
+
         with pytest.raises(ValidationError): # no "string"
-            config = SimpleApp.default_config()
+            config = SimpleApp.default_config(validate=True)
             assert isinstance(config, RuntimeConfig)
             assert config.value == 7
             assert not config.minus

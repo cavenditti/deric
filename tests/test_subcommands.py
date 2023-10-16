@@ -157,9 +157,10 @@ def test_subcommand_default_config():
 def test_subcommand_default_config_extra():
     args = ["main.py"]
     with mock.patch('sys.argv', args):
-        config = Subsub.default_config(
-                your_simple_app_nested_subsub_string="astring"
-                )
+        # There's now no way of doing this other than adding entries to dict,
+        # this is actually a good thing.
+        Subsub.Config["string"] = arg(str, "astring", "extra field added at runtime")
+        config = Subsub.default_config()
         assert isinstance(config, RuntimeConfig)
         assert config.nested.subsub.string == "astring"
         assert config.nested.subsub.unused == 12
