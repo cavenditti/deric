@@ -3,6 +3,7 @@ name = "deric"
 version = "0.2.0"
 description = "Declarative rich CLI"
 authors = ["Carlo Antonio Venditti <c.a.venditti@pm.me>"]
+repository = "https://github.com/cavenditti/deric"
 license = "MIT"
 readme = "README.md"
 
