@@ -20,9 +20,10 @@ class SimpleApp(Command):
   name = "your_simple_app"
   description = "Print a value and exit"
 
-  class Config:
-    string: str = arg(..., "value to print")
-    value: int = arg(4, "value to print")
+  Config = {
+    "string": arg(str, ..., "value to print")
+    "value": arg(int, 4, "value to print")
+  }
 
   def run(self, config):
     print(config.string, config.value * 2)
