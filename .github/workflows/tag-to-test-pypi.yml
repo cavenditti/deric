@@ -1,4 +1,4 @@
-name: Upload tagget commits to test PyPI
+name: Upload tagged commits to test PyPI
 
 on:
   push:
