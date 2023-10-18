@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "deric"
-version = "0.2.1"
+version = "0.2.2"
 description = "Declarative rich CLI"
 authors = ["Carlo Antonio Venditti <c.a.venditti@pm.me>"]
 repository = "https://github.com/cavenditti/deric"
