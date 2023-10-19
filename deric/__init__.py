@@ -128,6 +128,8 @@ class Command(metaclass=_CommandMeta):
         # TODO how to handle config_file and log_file if not specified in the Command subclass config?
         if "log_file" in config:
             setup_logging(config["log_file"])
+        else:
+            setup_logging(None)
 
         if "config_file" in config:
             path = config["config_file"]
