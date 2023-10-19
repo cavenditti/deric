@@ -19,7 +19,7 @@ from pydantic.fields import FieldInfo
 from pydantic_core import PydanticUndefined
 
 from tomlkit import parse
-from pydantic import Field, create_model
+from pydantic import ConfigDict, Field, create_model
 
 from deric.logs import setup_logging
 
@@ -81,6 +81,8 @@ class Command(metaclass=_CommandMeta):
     subcommands: Iterable[Type[Command]] = set()
 
     parent: Type[Command] | None = None
+    # FIXME "forbid" breaks subcommands
+    extra = "allow"  # whether to allow extra pydantic fields or not (only from config file)
 
     @classmethod
     def set_parent(cls, parent):
@@ -98,7 +100,11 @@ class Command(metaclass=_CommandMeta):
         config = cls.Config if hasattr(cls, "Config") else {}
 
         kls.Config = add_missing_fields(
-            deepcopy(config), "log_file", str, default, "Path of run log",
+            deepcopy(config),
+            "log_file",
+            str,
+            default,
+            "Path of run log",
         )
         return kls
 
@@ -174,9 +180,17 @@ class Command(metaclass=_CommandMeta):
 
     @classmethod
     def default_config(
-        cls, _subcommand: Tuple[str, RuntimeConfig] | None = None, *, validate=False, **kwargs,
+        cls,
+        _subcommand: Tuple[str, RuntimeConfig] | None = None,
+        *,
+        validate=False,
+        **kwargs,
     ):
-        """Get default config for command (and parents)."""
+        """
+        Get default config for command (and parents).
+
+        The returned RuntimeConfig is not validated as of now.
+        """
         # get prefix from all parents names
         kls = cls
         parents = [kls]
@@ -192,7 +206,9 @@ class Command(metaclass=_CommandMeta):
             k.removeprefix(prefix): v for k, v in kwargs.items() if k.startswith(prefix)
         }
 
-        config_model = create_model("config", **cls.Config)
+        config_model = create_model(
+            "config", **cls.Config, __config__=ConfigDict(extra=cls.extra),
+        )
         if validate:
             config_model_instance = config_model(**relevant)
         else:
@@ -240,9 +256,7 @@ class Command(metaclass=_CommandMeta):
                     if cls.name == parser.prog
                     else f"{prefix}{cls.name}_{name}",
                     "type": ftype if ftype in (int, float, str) else str,
-                    "action": "append"
-                    if ftype in (set[str], list[str])
-                    else "store",
+                    "action": "append" if ftype in (set[str], list[str]) else "store",
                     "default": field.default,
                     "help": field.description,
                 },
@@ -317,7 +331,9 @@ class Command(metaclass=_CommandMeta):
 
         Command configs are validated using Pydantic and a dict is returned.
         """
-        config_model = create_model("config", **cls.Config)
+        config_model = create_model(
+            "config", **cls.Config, __config__=ConfigDict(extra=cls.extra),
+        )
         config_model_instance = config_model(**relevant)
         config = config_model_instance.model_dump()
 
@@ -376,8 +392,12 @@ class Command(metaclass=_CommandMeta):
 
 def arg(argtype, default, description, **kwargs):
     """Shortcut for pydantic.Field, returning a tuple to pass to create_model."""
-    return (argtype, Field(default=default, description=description, json_schema_extra=kwargs))
+    return (
+        argtype,
+        Field(default=default, description=description, json_schema_extra=kwargs),
+    )
+
 
 def config(**kwargs):
     """Alternative to writing arg each time, doesn't support extra keyword arguments."""
-    return {k:arg(*v) for k,v in kwargs.items()}
+    return {k: arg(*v) for k, v in kwargs.items()}
